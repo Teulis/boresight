@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fallback status bar glyph. The live icon is drawn at runtime as a bitmap showing
+     the actual reading; this is what shows before the first sample arrives. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,17h2.5v4H3zM8,13h2.5v8H8zM13,9h2.5v12H13zM18,3h2.5v18H18z" />
+</vector>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- widgetCategory asks for both the home screen and the keyguard. AOSP dropped
+     keyguard widgets long ago, but One UI still honours the hint on devices that
+     offer lock screen widgets; where it does not, the quick settings tile covers
+     the same ground from the lock screen. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="80dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:maxResizeWidth="420dp"
+    android:maxResizeHeight="300dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget"
+    android:initialKeyguardLayout="@layout/widget"
+    android:previewLayout="@layout/widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen|keyguard"
+    android:description="@string/widget_desc" />

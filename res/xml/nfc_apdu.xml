@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The NDEF Type 4 application identifier. A reader selects this AID to ask "are you a
+  tag carrying an NDEF message?", and registering it is what makes Android route those
+  APDUs to NfcHce instead of to the secure element.
+
+  requireDeviceUnlock is true: the phone should not answer as a tag from a locked
+  screen in someone else's hand.
+-->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/nfc_emulation"
+    android:requireDeviceUnlock="true">
+    <aid-group android:description="@string/nfc_emulation"
+               android:category="other">
+        <aid-filter android:name="D2760000850101" />
+    </aid-group>
+</host-apdu-service>

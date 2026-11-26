@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.boresight"
+    android:versionCode="5"
+    android:versionName="2026.11.26.14">
+
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
+
+    <!-- Radio and position: what every readout and the survey log are built on. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Wi-Fi and BLE sweeps, for the survey log and the signature detector. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- The ongoing readout. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- The file browser asks for this explicitly from its own screen; nothing else
+         in the app uses it, and it still cannot reach other apps' private data. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Map tiles only. No telemetry, no accounts, nothing uploaded. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Package visibility on API 30+ hides other apps unless they are declared, so
+      without this the Shizuku detection reports "not installed" even when it is
+      running. Declaring it only makes it visible; nothing here depends on it.
+    -->
+    <!-- Optional. Absent or ungranted simply means the app stays unprivileged. -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <!-- So the file browser can put an app's own icon and name beside its folder under
+         Android/data. Package visibility is filtered from API 30, and a folder of three
+         hundred package names is unreadable without it. This build is sideloaded and
+         never goes near Play, where this permission needs a declared justification. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!-- Reading and writing tags. Not required to run: the NFC screen says so and the
+         rest of the app does not care, so uses-feature stays optional. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
+    <queries>
+        <!-- Keystring receivers. Without this, queryBroadcastReceivers returns
+             nothing on API 30 and up and the whole catalogue reads as dead. -->
+        <intent>
+            <action android:name="com.samsung.android.action.SECRET_CODE" />
+            <data android:scheme="android_secret_code" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
+
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <application
+        android:label="Boresight"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="true"
+        android:appCategory="productivity"
+        android:supportsRtl="true"
+        android:theme="@style/Boresight">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="Boresight"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- First run only. MainActivity hands over to it before asking for anything,
+             so the reasons are on screen before the platform's prompts are. -->
+        <activity android:name=".WelcomeActivity" android:exported="false" android:launchMode="singleTop" android:label="Welcome" />
+
+        <activity android:name=".DetailsActivity"  android:exported="false" android:launchMode="singleTop" android:label="Full detail" />
+        <activity android:name=".NetActivity"      android:exported="false" android:launchMode="singleTop" android:label="Network" />
+        <activity android:name=".NetToolsActivity"  android:exported="false" android:launchMode="singleTop" android:label="Net tools" />
+        <activity android:name=".SatActivity"      android:exported="false" android:launchMode="singleTop" android:label="Direct to cell" />
+        <activity android:name=".ConsoleActivity"  android:exported="false" android:launchMode="singleTop" android:label="Console" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".FilesActivity"    android:exported="false" android:launchMode="singleTop" android:label="Files" />
+        <activity android:name=".MapActivity"      android:exported="false" android:launchMode="singleTop" android:label="Map" />
+        <activity android:name=".HistoryActivity"  android:exported="false" android:launchMode="singleTop" android:label="History" />
+        <activity android:name=".RadiosActivity"   android:exported="false" android:launchMode="singleTop" android:label="Radios" />
+        <activity android:name=".CellActivity"     android:exported="false" android:launchMode="singleTop" android:label="Cell" />
+        <activity android:name=".SensorsActivity"  android:exported="false" android:launchMode="singleTop" android:label="Sensors" />
+        <activity android:name=".GnssActivity"     android:exported="false" android:launchMode="singleTop" android:label="Satellites" />
+        <activity android:name=".ModemActivity"    android:exported="false" android:launchMode="singleTop" android:label="Modulation" />
+        <activity android:name=".WardriveActivity" android:exported="false" android:launchMode="singleTop" android:label="Recording" />
+        <activity android:name=".FlockActivity"    android:exported="false" android:launchMode="singleTop" android:label="Detector" />
+        <activity android:name=".SettingsActivity" android:exported="false" android:launchMode="singleTop" android:label="Settings" />
+        <!-- keepScreenOn is set in code, not here: the manifest cannot express
+             "sometimes", and it is a preference. -->
+        <activity android:name=".HudActivity"      android:exported="false" android:launchMode="singleTop" android:label="Driving" />
+        <activity android:name=".SyncActivity"     android:exported="false" android:launchMode="singleTop" android:label="Sync" />
+        <activity android:name=".AboutActivity"    android:exported="false" android:launchMode="singleTop" android:label="About" />
+        <activity android:name=".LogActivity"      android:exported="false" android:launchMode="singleTop" android:label="Log" />
+        <activity android:name=".SshActivity"      android:exported="false" android:launchMode="singleTop" android:label="SSH" />
+        <activity android:name=".TaskActivity"     android:exported="false" android:launchMode="singleTop" android:label="Tasks" />
+        <activity android:name=".DeviceActivity"   android:exported="false" android:launchMode="singleTop" android:label="Device" />
+        <activity android:name=".StorageActivity"  android:exported="false" android:launchMode="singleTop" android:label="Storage" />
+        <activity android:name=".UsbActivity"      android:exported="false" android:launchMode="singleTop" android:label="USB" />
+        <!-- singleTop and the foreground dispatch together: a tag tapped while this
+             screen is open must come back into the same instance, not start a new one
+             on top of itself and lose the dump that is already on screen. -->
+        <!-- configChanges because a rotation would otherwise destroy and recreate this
+             screen mid-dump: reader mode is torn down and re-armed, the Tag handle goes
+             stale, and a sector-by-sector read that was half done is simply lost. The
+             layout is built in code as a single scrolling column, so it needs no rebuild
+             to survive the turn. -->
+        <activity android:name=".NfcActivity"      android:exported="false" android:launchMode="singleTop" android:label="NFC"
+                  android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
+        <!-- Answers as an NDEF Type 4 tag when a reader selects that AID. Exported and
+             permission-guarded because the NFC service is what binds to it. -->
+        <service android:name=".NfcHce"
+                 android:exported="true"
+                 android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data android:name="android.nfc.cardemulation.host_apdu_service"
+                       android:resource="@xml/nfc_apdu" />
+        </service>
+        <activity android:name=".SessionActivity"  android:exported="false" android:launchMode="singleTop" android:label="Session log" />
+        <activity android:name=".WalkActivity"     android:exported="false" android:launchMode="singleTop" android:label="Walk test" />
+        <activity android:name=".KeystringActivity" android:exported="false" android:launchMode="singleTop" android:label="Keystrings" />
+
+        <!-- Shizuku delivers its binder through this provider. Harmless when Shizuku
+             is absent: it simply never receives anything. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="com.boresight.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <service
+            android:name=".MonitorService"
+            android:exported="false"
+            android:foregroundServiceType="location|dataSync" />
+
+        <receiver
+            android:name=".Widget"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <service
+            android:name=".StatsTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

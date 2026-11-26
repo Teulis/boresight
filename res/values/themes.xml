@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The platform has no DayNight.NoActionBar variant, so the app declares its own.
+      The title bar is drawn by Header: targeting SDK 35 puts the window edge-to-edge
+      on Android 15 and up, and the OEM action bar then overlays the content with a
+      height that does not match what it draws.
+    -->
+    <style name="Boresight" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

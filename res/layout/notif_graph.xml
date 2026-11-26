@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Expanded notification body. The graph is drawn in code and set as a bitmap,
+     because a notification cannot host a custom View. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="2dp"
+    android:paddingBottom="4dp">
+
+    <ImageView
+        android:id="@+id/graph"
+        android:layout_width="match_parent"
+        android:layout_height="108dp"
+        android:scaleType="fitXY"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/line"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="4dp"
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:maxLines="2" />
+</LinearLayout>
