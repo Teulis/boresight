@@ -1,11 +1,34 @@
 # Boresight
 
-An Android RF survey and diagnostics tool, built for DAS commissioning work and for
-poking at what a phone will actually tell you.
+A general-purpose Android radio and diagnostics toolbox. It grew out of DAS
+commissioning work, but most of it is not about DAS: it is about getting a phone to say
+what it actually knows, across cellular, Wi-Fi, Bluetooth, GNSS, NFC, USB, the
+filesystem and the network stack. Expect a toolbox rather than one tool with one
+purpose.
 
 Built without Gradle. `build.ps1` drives `aapt2`, `javac`, `d8`, `zipalign` and
 `uber-apk-signer` directly, which keeps the whole toolchain visible and the build a few
 seconds rather than a few minutes.
+
+## Tested on two phones
+
+Everything here has been run on a **Galaxy S22 Ultra (Android 15)** and a **Galaxy S25
+Ultra (Android 17)**, on AT&T and T-Mobile in the United States. That is the whole of
+it: two phones, one manufacturer, one country.
+
+This matters more than it would for most apps, because almost everything interesting
+here depends on behaviour that vendors implement differently and are allowed to. Which
+telephony fields a modem populates, whether it reports neighbours at all, whether
+`CellInfo` carries a timing advance, what the physical channel configuration contains,
+how aggressively Wi-Fi scans are throttled, whether BLE results arrive with the screen
+off — all of it varies by chipset, by Android version, by carrier, and sometimes by
+build. The code is written to degrade honestly when a field is missing, and that
+behaviour has been exercised on exactly two devices.
+
+So: if a screen is blank or a number reads as a dash on your phone, that is the
+designed response to a platform that would not answer — but whether it is the *right*
+response on your hardware is genuinely unknown. Reports from other devices are the most
+useful thing anyone could send.
 
 ## Getting a build onto a phone
 
