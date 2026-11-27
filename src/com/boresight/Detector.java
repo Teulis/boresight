@@ -53,7 +53,7 @@ public final class Detector {
      * its own edits but is topped up with the rules it never had, because the usual
      * failure here is silent: the app looks like it is working and simply never matches.
      */
-    private static final int SEED_VERSION = 3;
+    private static final int SEED_VERSION = 4;
     private static final String SEED_VERSION_KEY = "detector_seed_version";
 
     /**
@@ -123,6 +123,34 @@ public final class Detector {
         {"Your OUI list",     "",              "oui",  "",                            "wifi", "95",
          "Blank on purpose. Put a confirmed MAC prefix here, e.g. a4:da:22. Note that "
          + "newer cameras use locally-administered MACs, which no OUI rule can catch."},
+
+        // --- product and competitor names, from Flock-You-Android -------------
+        // github.com/MaxwellDPS/Flock-You-Android, docs/detections. Its primary
+        // Flock pattern is the one we already had; these are the ones we did not.
+        {"Flock Falcon",      "Flock Safety",  "ssid", "(?i)^falcon[-_ ]?",           "wifi", "50",
+         "Flock's own product name for the fixed ALPR camera. Moderate confidence "
+         + "because 'Falcon' is also a perfectly ordinary name for a home router; "
+         + "anchored to the start so it does not match one buried in a longer name."},
+        {"Flock Sparrow",     "Flock Safety",  "ssid", "(?i)^sparrow[-_ ]?",          "wifi", "50",
+         "Flock product name. Same caveat as Falcon."},
+        {"Flock Condor",      "Flock Safety",  "ssid", "(?i)^condor[-_ ]?",           "wifi", "50",
+         "Flock product name - the PTZ camera. Same caveat as Falcon."},
+        {"FS prefix",         "Flock Safety",  "ssid", "(?i)^fs[-_]",                 "wifi", "45",
+         "Two letters is thin, so the separator is required: 'fs-' or 'fs_' at the "
+         + "start, never a bare 'fs'. Reported by Flock-You-Android."},
+        {"Vigilant ALPR",     "Motorola",      "ssid", "(?i)^vigilant[-_ ]?",         "wifi", "60",
+         "Not Flock. Vigilant Solutions is Motorola's plate reader, and a survey that "
+         + "only knows one vendor will report a street as clear when it is not."},
+        {"Genetec ALPR",      "Genetec",       "ssid", "(?i)^genetec[-_ ]?",          "wifi", "60",
+         "Another vendor, same reasoning as Vigilant."},
+        {"AutoVu ALPR",       "Genetec",       "ssid", "(?i)^autovu[-_ ]?",           "wifi", "60",
+         "Genetec's plate-reader product line."},
+        {"Generic ALPR",      "unknown",       "ssid", "(?i)^alpr[-_ ]?",             "wifi", "55",
+         "An access point that names itself after the job. Vendor unknown by "
+         + "definition, which is why the vendor column says so."},
+        {"Generic LPR cam",   "unknown",       "ssid", "(?i)^lpr[-_ ]?cam",           "wifi", "55",
+         "As above. 'lpr' alone is too close to printing (LPR is also a print "
+         + "protocol), so the pattern requires 'cam' after it."},
     };
 
     /** Seeded disabled: too broad to be on by default, kept so it can be switched on. */

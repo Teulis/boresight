@@ -86,6 +86,31 @@ public final class Sync {
         return id;
     }
 
+    /** Names the user has chosen not to share, one per line, blanks and # dropped. */
+    public static java.util.List<String> heldBack(Context c) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        String raw = Prefs.string(c, Prefs.SYNC_EXCLUDE, "");
+        for (String line : raw.split("\n")) {
+            String t = line.trim();
+            if (!t.isEmpty() && !t.startsWith("#")) out.add(t);
+        }
+        return out;
+    }
+
+    public static void hold(Context c, String name, boolean held) {
+        java.util.List<String> now = heldBack(c);
+        if (held) {
+            for (String s : now) if (s.equalsIgnoreCase(name)) return;
+            now.add(name);
+        } else {
+            java.util.Iterator<String> it = now.iterator();
+            while (it.hasNext()) if (it.next().equalsIgnoreCase(name)) it.remove();
+        }
+        StringBuilder b = new StringBuilder();
+        for (String s : now) { if (b.length() > 0) b.append('\n'); b.append(s); }
+        Prefs.put(c, Prefs.SYNC_EXCLUDE, b.toString());
+    }
+
     public static String deviceName(Context c) {
         String n = Prefs.string(c, Prefs.DEVICE_NAME, null);
         if (n == null || n.trim().isEmpty()) n = android.os.Build.MODEL;
@@ -268,6 +293,13 @@ public final class Sync {
             w.write("\"app\":\"boresight\",\n");
             w.write("\"device\":" + JSONObject.quote(deviceId(c)) + ",\n");
             w.write("\"deviceName\":" + JSONObject.quote(deviceName(c)) + ",\n");
+            // Which build wrote this. Added because a survey turned up with a radio
+            // logged 267 times in one session that the rider filter should have capped
+            // at eight — and there was no way to tell whether the file predated the fix
+            // or the fix was broken. Those need opposite responses, and a bundle that
+            // cannot say which build made it cannot settle the question.
+            w.write("\"version\":" + JSONObject.quote(Stamp.VERSION) + ",\n");
+            w.write("\"commit\":" + JSONObject.quote(Stamp.COMMIT) + ",\n");
             w.write("\"written\":" + System.currentTimeMillis() + ",\n");
 
             w.write("\"sessions\":[");
@@ -288,7 +320,7 @@ public final class Sync {
             w.write("],\n");
 
             w.write("\"obs\":[");
-            r.points = streamObs(store, w, onlySession);
+            r.points = streamObs(c, store, w, onlySession);
             w.write("],\n");
 
             w.write("\"hits\":[");
@@ -319,7 +351,8 @@ public final class Sync {
     }
 
     /** Straight off the cursor, a row at a time. */
-    private static int streamObs(Store store, Writer w, long onlySession) throws Exception {
+    private static int streamObs(Context ctx, Store store, Writer w, long onlySession)
+            throws Exception {
         // The downlink frequency is stored in a column called "freq" while the field on
         // Obs is dlMhz. Naming the field here instead of the column threw on every
         // export and truncated the bundle at the opening bracket.
@@ -330,8 +363,28 @@ public final class Sync {
                    // Appended at the end so every existing positional index above
                    // stays put. Schema 4.
                    + "rsrq, rssi, cqi, bw, age, ntn, cc, ccbw FROM obs";
-        String[] args = null;
-        if (onlySession > 0) { sql += " WHERE session = ?"; args = new String[]{String.valueOf(onlySession)}; }
+        java.util.List<String> argList = new java.util.ArrayList<>();
+        StringBuilder where = new StringBuilder();
+        if (onlySession > 0) {
+            where.append("session = ?");
+            argList.add(String.valueOf(onlySession));
+        }
+        // Radios the user has chosen to keep to themselves. Filtered here rather than
+        // at record time on purpose: they stay in this phone's own survey and are left
+        // out of what is handed to somebody else. A car belongs in your log and in
+        // nobody else's.
+        java.util.List<String> held = heldBack(ctx);
+        if (!held.isEmpty()) {
+            if (where.length() > 0) where.append(" AND ");
+            where.append("(name IS NULL OR name NOT IN (");
+            for (int i = 0; i < held.size(); i++) {
+                where.append(i > 0 ? ",?" : "?");
+                argList.add(held.get(i));
+            }
+            where.append("))");
+        }
+        if (where.length() > 0) sql += " WHERE " + where;
+        String[] args = argList.isEmpty() ? null : argList.toArray(new String[0]);
         sql += " ORDER BY ts";
 
         Cursor c = store.db().rawQuery(sql, args);
@@ -399,6 +452,8 @@ public final class Sync {
     public static final class Incoming {
         public boolean ok;
         public String device = "", deviceName = "";
+        /** Build that wrote the bundle. Empty for anything written before schema 4. */
+        public String version = "", commit = "";
         public long written;
         public int sessions, points, hits;
         public int addedSessions, addedPoints, addedHits, skipped;
@@ -474,6 +529,10 @@ public final class Sync {
                     in.device = r.nextString();
                 } else if ("deviceName".equals(key)) {
                     in.deviceName = r.nextString();
+                } else if ("version".equals(key)) {
+                    in.version = r.nextString();
+                } else if ("commit".equals(key)) {
+                    in.commit = r.nextString();
                 } else if ("written".equals(key)) {
                     in.written = r.nextLong();
                 } else if ("sessions".equals(key)) {

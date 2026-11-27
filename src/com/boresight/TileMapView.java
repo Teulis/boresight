@@ -80,6 +80,14 @@ public class TileMapView extends View {
         public Object tag;
         public boolean ring;            // draw as an outline, for lingering or weak hits
         public float alpha = 1f;
+        /**
+         * Compass degrees this thing faces, or -1 for "not known".
+         *
+         * A camera's bearing is the difference between "there is a plate reader on that
+         * corner" and "it is pointed at the lane you are about to drive down". The
+         * OpenStreetMap data carries it and nothing was drawing it.
+         */
+        public int facingDeg = -1;
     }
 
     /** An estimated transmitter position with its uncertainty. */
@@ -512,6 +520,7 @@ public class TileMapView extends View {
             float x = screenX(m.lon), y = screenY(m.lat);
             if (x < -pad || y < -pad || x > w + pad || y > h + pad) continue;
             float r = th.dpf(m.radiusDp);
+            if (m.facingDeg >= 0) drawFacing(cv, x, y, m);
             if (m.ring) {
                 pGrid.setColor(Skin.alpha(m.colour, 0.9f * m.alpha));
                 pGrid.setStrokeWidth(th.dpf(1.4f));
@@ -522,6 +531,35 @@ public class TileMapView extends View {
             }
         }
         drawLabels(cv, w, h);
+    }
+
+    /**
+     * The wedge a camera looks down.
+     *
+     * Drawn in screen space from a fixed pixel length rather than from a distance on
+     * the ground, because it is not a claim about range. Nothing in the map data says
+     * how far one of these reads a plate, and a wedge scaled in metres would be read as
+     * saying so. This is a direction marker that stays legible at every zoom.
+     *
+     * The arc is deliberately wide and faint. The OSM tag is a single bearing, often
+     * recorded by somebody standing in the road with a phone compass, so a crisp narrow
+     * beam would be a precision the source does not have.
+     */
+    private void drawFacing(Canvas cv, float x, float y, Mark m) {
+        float len = th.dpf(26);
+        float half = 26f;                       // degrees either side of the bearing
+        // Compass bearings run clockwise from north; Canvas angles run clockwise from
+        // east. Hence the -90.
+        float start = m.facingDeg - 90f - half;
+
+        android.graphics.RectF box = new android.graphics.RectF(
+                x - len, y - len, x + len, y + len);
+        pMark.setColor(Skin.alpha(m.colour, 0.16f * m.alpha));
+        cv.drawArc(box, start, half * 2f, true, pMark);
+
+        pGrid.setColor(Skin.alpha(m.colour, 0.55f * m.alpha));
+        pGrid.setStrokeWidth(th.dpf(1f));
+        cv.drawArc(box, start, half * 2f, true, pGrid);
     }
 
     /**

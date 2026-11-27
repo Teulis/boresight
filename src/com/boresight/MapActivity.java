@@ -553,8 +553,15 @@ public class MapActivity extends Activity {
                 hits++;
                 TileMapView.Mark m = new TileMapView.Mark();
                 m.lat = h.lat; m.lon = h.lon;
-                m.colour = skin.accent(Skin.CH_ALERT);
-                m.radiusDp = 5.5f;
+                // A radio this phone received is drawn solid in the alert colour; a
+                // place where you merely drove past somebody else's pin is drawn as a
+                // ring in the known-camera colour, so it reads as belonging to that
+                // layer rather than to this one. On a map the two were identical dots,
+                // which made a claim look exactly like a measurement.
+                boolean mapped = "map".equals(h.medium);
+                m.colour = mapped ? skin.accent(Skin.CH_RSRQ) : skin.accent(Skin.CH_ALERT);
+                m.ring = mapped;
+                m.radiusDp = mapped ? 4f : 5.5f;
                 m.tag = h;
                 marks.add(m);
             }
@@ -578,6 +585,10 @@ public class MapActivity extends Activity {
                 m.colour = skin.accent(Skin.CH_RSRQ);
                 m.radiusDp = 4.5f;
                 m.ring = true;
+                // OSM records which way most of these face. Drawing it is the
+                // difference between "there is a reader on that corner" and "it is
+                // pointed at the lane you are about to drive down".
+                m.facingDeg = cm.dir;
                 m.tag = cm;
                 marks.add(m);
             }

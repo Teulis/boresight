@@ -7,6 +7,8 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -687,6 +689,84 @@ public final class Store extends SQLiteOpenHelper {
     private static String strSoft(Cursor c, String k) {
         int i = c.getColumnIndex(k);
         return i < 0 || c.isNull(i) ? null : c.getString(i);
+    }
+
+    /**
+     * Named radios in the log, most sightings first.
+     *
+     * The order is the useful part. What dominates a survey by row count is never the
+     * interesting thing — it is whatever was in the car, because that was in range at
+     * every single point. So the list is sorted worst-offender first and the thing you
+     * want to hold back is at the top rather than somewhere in a thousand rows.
+     */
+    public List<Rider> mostSeen(int limit) {
+        List<Rider> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT name, COUNT(*) n, MIN(lat), MAX(lat), MIN(lon), MAX(lon) "
+              + "FROM obs WHERE name IS NOT NULL AND TRIM(name) <> '' "
+              + "AND kind IN (?, ?) GROUP BY name ORDER BY n DESC LIMIT " + limit,
+                new String[]{KIND_WIFI, KIND_BLE});
+        try {
+            while (c.moveToNext()) {
+                Rider r = new Rider();
+                r.name = c.getString(0);
+                r.rows = c.getInt(1);
+                r.spanM = c.isNull(2) ? 0
+                        : Locate.haversineM(c.getDouble(2), c.getDouble(4),
+                                            c.getDouble(3), c.getDouble(5));
+                out.add(r);
+            }
+        } finally { c.close(); }
+        return out;
+    }
+
+    /** A named radio and how far it moved with the phone. */
+    public static class Rider {
+        public String name;
+        public int rows;
+        public double spanM;
+    }
+
+    /**
+     * Named radios already in the log that moved too far to be fixed.
+     *
+     * The same geometry the live filter uses, asked of what was already recorded
+     * instead of the current sweep — so it works on a survey taken before the filter
+     * existed, and on the devices the live filter cannot catch because they rotate
+     * their address. Grouping by name rather than by address is the whole point: a
+     * phone key seen under four addresses is one name.
+     *
+     * The span is the bounding box diagonal rather than a path length. Cheap in SQL,
+     * and the question is only "could a fixed transmitter be seen across this?", for
+     * which a box is a fair answer and an underestimate of the distance driven.
+     */
+    public List<Rider> ridersSeen(int limit) {
+        List<Rider> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT name, COUNT(*) n, MIN(lat), MAX(lat), MIN(lon), MAX(lon) "
+              + "FROM obs WHERE name IS NOT NULL AND TRIM(name) <> '' "
+              + "AND lat IS NOT NULL AND kind IN (?, ?) "
+              + "GROUP BY name HAVING n >= 8",
+                new String[]{KIND_WIFI, KIND_BLE});
+        try {
+            while (c.moveToNext()) {
+                double lat0 = c.getDouble(2), lat1 = c.getDouble(3);
+                double lon0 = c.getDouble(4), lon1 = c.getDouble(5);
+                double span = Locate.haversineM(lat0, lon0, lat1, lon1);
+                if (span <= 3000) continue;          // the live rule's threshold
+                Rider r = new Rider();
+                r.name = c.getString(0);
+                r.rows = c.getInt(1);
+                r.spanM = span;
+                out.add(r);
+            }
+        } finally { c.close(); }
+        Collections.sort(out, new Comparator<Rider>() {
+            @Override public int compare(Rider a, Rider b) {
+                return Double.compare(b.spanM, a.spanM);
+            }
+        });
+        return out.size() > limit ? out.subList(0, limit) : out;
     }
 
     /** Located sightings for the map, newest first, capped so the view stays quick. */

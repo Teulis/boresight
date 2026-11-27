@@ -431,8 +431,9 @@ public class MonitorService extends Service {
             if (ageMs > MAX_SCAN_AGE_MS) continue;
             String ssid = ssidOf(r);
             if (detect && !zoneBlocked) {
+                wifiSeen++;
                 Detector.Match m = detector.test("wifi", ssid, r.BSSID, r.level);
-                if (m != null) record(m, l);
+                if (m != null) { wifiMatched++; record(m, l); }
             }
             // Filtered after the detector has had its look, never before: suppressing a
             // possible camera to tidy up the log would be the wrong trade.
@@ -442,7 +443,7 @@ public class MonitorService extends Service {
                 String ident = mac != null ? "wifi:" + mac : "wifi:" + ssid;
                 // The geometric rule, on the real fix rather than the stored one: a
                 // blurred position would flatten the very span being measured.
-                if (riders.ridesWithYou(ident, l.getLatitude(), l.getLongitude())) continue;
+                if (riders.ridesWithYou(ident, ssid, l.getLatitude(), l.getLongitude())) continue;
 
                 Store.Obs o = new Store.Obs();
                 o.session = session;
@@ -530,9 +531,46 @@ public class MonitorService extends Service {
         bleScanning = false;
     }
 
+    /**
+     * Advertisements seen and matches made, so "it is not detecting" becomes a fact
+     * rather than an impression.
+     *
+     * These two numbers separate the only explanations that matter. No advertisements
+     * at all means the scan is not running — throttled, failed, or killed by the
+     * screen-off rule. Plenty of advertisements and no matches means the scan is fine
+     * and the rules do not fit what these cameras actually broadcast. Without them the
+     * two look identical from the outside, and they need opposite fixes.
+     */
+    private int bleSeen, bleMatched, wifiSeen, wifiMatched;
+    private long lastDetectReport;
+
     private final ScanCallback bleCallback = new ScanCallback() {
+        @Override public void onScanFailed(int errorCode) {
+            // Never silently. Android throttles an app that starts scans more than five
+            // times in thirty seconds, and from 8.1 it withholds results entirely for an
+            // unfiltered scan while the screen is off — both of which look exactly like
+            // "there are no cameras here".
+            String why;
+            switch (errorCode) {
+                case ScanCallback.SCAN_FAILED_ALREADY_STARTED:
+                    why = "already started"; break;
+                case ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED:
+                    why = "registration failed — scanning started too often, throttled";
+                    break;
+                case ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED:
+                    why = "feature unsupported"; break;
+                case ScanCallback.SCAN_FAILED_INTERNAL_ERROR:
+                    why = "internal error"; break;
+                default:
+                    why = "code " + errorCode;
+            }
+            bleScanning = false;
+            Logs.e("ble", "scan failed: " + why);
+        }
+
         @Override public void onScanResult(int type, ScanResult r) {
             if (r == null) return;
+            bleSeen++;
             String name = null;
             int[] companyIds = null;
             try {
@@ -560,7 +598,8 @@ public class MonitorService extends Service {
             if (Prefs.bool(MonitorService.this, Prefs.FLOCK_ON, false)) {
                 Detector.Match m = detector.test("ble", name, mac,
                         rssiOrAbsent(r.getRssi()), companyIds);
-                if (m != null) record(m, l);
+                if (m != null) { bleMatched++; record(m, l); }
+                reportDetect();
             }
             if (Prefs.bool(MonitorService.this, Prefs.LOG_BLE, false)
                     && Prefs.bool(MonitorService.this, Prefs.WARDRIVE_ON, false)
@@ -572,7 +611,7 @@ public class MonitorService extends Service {
                 String ident = stored != null ? "ble:" + stored
                              : (name != null ? "ble:" + name : null);
                 if (ident == null) return;
-                if (riders.ridesWithYou(ident, l.getLatitude(), l.getLongitude())) return;
+                if (riders.ridesWithYou(ident, name, l.getLatitude(), l.getLongitude())) return;
 
                 Store.Obs o = new Store.Obs();
                 o.session = session;
@@ -657,10 +696,44 @@ public class MonitorService extends Service {
         }, "alpr-autoload").start();
     }
 
+    /**
+     * Once a minute while detecting, write down what the sweeps actually saw.
+     *
+     * Cheap, and it is the difference between a bug report that says "it did not detect
+     * anything" and one that says "it saw 1,400 advertisements and matched none of
+     * them" — which is the whole diagnosis.
+     */
+    private void reportDetect() {
+        long now = System.currentTimeMillis();
+        if (now - lastDetectReport < 60_000) return;
+        lastDetectReport = now;
+        Logs.i("detect", "ble " + bleSeen + " seen / " + bleMatched + " matched"
+                + "   ·   wifi " + wifiSeen + " seen / " + wifiMatched + " matched"
+                + "   ·   rules " + detector.enabledCount() + " enabled");
+    }
+
     private void checkKnownAhead(Location l) {
         if (l == null) return;
         if (!Prefs.bool(this, Prefs.ALERT_KNOWN, true)) return;
+
+        // Only while actually doing something. The service outlives a recording run —
+        // it stays up for the detector and the ongoing readout — and location updates
+        // keep arriving, so without this the phone goes on beeping about cameras hours
+        // after the survey was stopped. "I stopped recording and it still beeps" is the
+        // bug, and an alert nobody asked for is the fastest way to get alerts muted.
+        if (!recording && !Prefs.bool(this, Prefs.FLOCK_ON, false)) return;
+
         if (Prefs.inPrivateZone(this, l.getLatitude(), l.getLongitude())) return;
+
+        float speed = l.hasSpeed() ? l.getSpeed() : 0f;
+        float heading = l.hasBearing() ? l.getBearing() : 0f;
+
+        // Standing still, nothing is "coming up". The old rule treated everything in
+        // range as ahead below walking pace, on the theory that a stationary bearing is
+        // meaningless — which is true, but the conclusion was wrong: parked near a
+        // camera it re-alerted every time the cooldown expired, forever. The screen
+        // already promises this only fires for one in front while moving.
+        if (speed < 1.5f) return;
 
         int range = Prefs.integer(this, Prefs.ALERT_RANGE_M, 400);
         List<Alpr.Cam> near;
@@ -669,14 +742,57 @@ public class MonitorService extends Service {
         } catch (Throwable t) {
             return;
         }
-        float speed = l.hasSpeed() ? l.getSpeed() : 0f;
-        float heading = l.hasBearing() ? l.getBearing() : 0f;
         for (Alpr.Cam m : near) {
-            // Behind you is not a warning, it is noise. Below walking pace the GPS
-            // bearing is meaningless, so everything within range counts as ahead.
-            if (speed >= 1.5f && !Alpr.ahead(m, heading, speed)) continue;
+            // Behind you is not a warning, it is noise.
+            if (!Alpr.ahead(m, heading, speed)) continue;
             Alert.approaching(this, "osm:" + m.osm);
+            passed(m, l);
         }
+    }
+
+    /**
+     * Record that the drive went past a camera somebody else mapped.
+     *
+     * Kept distinct from a radio match on purpose, and the distinction is the honest
+     * part: a match is this phone measuring a transmitter, while this is a position
+     * somebody put on OpenStreetMap and a GPS fix saying you were near it. The camera
+     * may have been removed, mistagged, or never there. So it is written with its own
+     * rule label and medium, carries its own confidence, and never claims an RSSI —
+     * because no radio was heard.
+     *
+     * Recording it at all is what makes "where was the farthest one" answerable from a
+     * drive, which the alert alone never could: a beep leaves nothing behind.
+     */
+    private void passed(Alpr.Cam m, Location l) {
+        // No recording test. It is called from the same loop that sounds the alert, so
+        // every beep leaves a row and the two can never disagree — which was the whole
+        // complaint: the phone announced a camera and then had nothing to show for it.
+        // The hits table has never belonged to a session, so a detection outside a
+        // recording run is already a thing it can hold.
+        String key = "osm:" + m.osm;
+        // The same grid rule the radio matches use, so a camera passed twice on one
+        // street does not become two rows.
+        if (store.hitSeenNear(key, l.getLatitude(), l.getLongitude(), 0.0005)) return;
+
+        Store.Hit h = new Store.Hit();
+        h.ts = System.currentTimeMillis();
+        h.lat = Prefs.blur(this, l.getLatitude());
+        h.lon = Prefs.blur(this, l.getLongitude());
+        h.acc = l.getAccuracy();
+        h.rule = "Passed a mapped camera";
+        h.vendor = m.operator == null || m.operator.isEmpty() ? "mapped" : m.operator;
+        h.name = m.title();
+        h.mac = key;
+        h.medium = "map";
+        h.rssi = Integer.MAX_VALUE;
+        // Deliberately modest. This is someone else's report plus a fix, not a
+        // measurement, and it should never outrank a radio that was actually heard.
+        h.confidence = 25;
+        // near() already measured the distance; recomputing it would risk disagreeing
+        // with the range test that let this camera through in the first place.
+        h.note = "OpenStreetMap " + m.osm + ", passed at " + Math.round(m.metres) + " m";
+        store.insertHit(h);
+        Logs.i("detect", "passed mapped camera " + m.osm);
     }
 
     // ------------------------------------------------------------------ control

@@ -3,10 +3,12 @@ package com.boresight;
 import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -229,11 +231,39 @@ public class FlockActivity extends Screen {
             return;
         }
         long now = System.currentTimeMillis();
-        boolean first = true;
-        for (final Store.Hit h : hits) {
-            if (!first) hitsList.addView(th.rule(this));
-            first = false;
-            hitsList.addView(hitRow(h, now));
+
+        // Two kinds, and the difference between them is the most important distinction
+        // in this screen: one is a radio this phone received, the other is somebody
+        // else's pin plus a GPS fix saying you were near it. Mixed into one list they
+        // look alike, and a reader would have to notice a small "map" in the second
+        // line to tell a measurement from a claim.
+        List<Store.Hit> heard = new ArrayList<>();
+        List<Store.Hit> passed = new ArrayList<>();
+        for (Store.Hit h : hits) {
+            if ("map".equals(h.medium)) passed.add(h); else heard.add(h);
+        }
+
+        if (!heard.isEmpty()) {
+            hitsList.addView(th.heading(this, "Heard by this phone  ·  " + heard.size()));
+            boolean first = true;
+            for (final Store.Hit h : heard) {
+                if (!first) hitsList.addView(th.rule(this));
+                first = false;
+                hitsList.addView(hitRow(h, now));
+            }
+        }
+
+        if (!passed.isEmpty()) {
+            hitsList.addView(th.heading(this, "Passed on the map  ·  " + passed.size()));
+            hint(hitsList, "Not measurements. Each one is a camera somebody mapped on "
+                         + "OpenStreetMap and a fix saying you drove within range. The "
+                         + "camera may have been moved, mistagged, or never there.");
+            boolean first = true;
+            for (final Store.Hit h : passed) {
+                if (!first) hitsList.addView(th.rule(this));
+                first = false;
+                hitsList.addView(hitRow(h, now));
+            }
         }
         refreshStatus();
     }
@@ -246,6 +276,23 @@ public class FlockActivity extends Screen {
 
         LinearLayout top = th.row(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
+
+        boolean mapped = "map".equals(h.medium);
+
+        // The badge carries the kind, so a row read on its own still says which it is.
+        // Colour alone would not: these sit in a list where the eye is looking for a
+        // name, and a mapped pass dressed as a measurement is the one mistake this
+        // screen must not make.
+        TextView kind = th.num(this, mapped ? "MAP" : "RADIO", 9, skin.windowFlat());
+        kind.setTypeface(skin.face(true, Typeface.BOLD));
+        kind.setPadding(th.dp(5), th.dp(2), th.dp(5), th.dp(2));
+        kind.setBackground(th.solid(
+                mapped ? skin.accent(Skin.CH_RSRQ) : skin.accent(Skin.CH_ALERT),
+                skin.badgeCornerRadius));
+        LinearLayout.LayoutParams klp = Theme.fixed(ViewGroup.LayoutParams.WRAP_CONTENT,
+                                                    ViewGroup.LayoutParams.WRAP_CONTENT);
+        klp.setMargins(0, 0, th.dp(7), 0);
+        top.addView(kind, klp);
 
         String who = h.vendor == null || h.vendor.isEmpty() ? h.rule : h.vendor;
         TextView name = th.text(this, who == null ? "match" : who, 13, skin.inkPrimary);

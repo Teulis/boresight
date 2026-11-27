@@ -73,12 +73,17 @@ public class HudActivity extends Screen {
         // figures rather than below them.
         LinearLayout head = pane(null);
 
+        // Carrier large, site small, which is the other way round from how this started.
+        // At the wheel the question is who you are on — T-Mobile, FirstNet, a satellite
+        // — because that is what changes as you drive and what you act on. Which eNB
+        // and sector is a thing you look up when you have stopped, and it was taking
+        // the largest type on the screen to say it.
         LinearLayout idRow = th.row(this);
         LinearLayout idLeft = th.column(this);
-        carrierLine = th.text(this, "no service", 12, skin.inkSecondary);
+        carrierLine = th.text(this, "no service", 30, skin.inkPrimary);
+        carrierLine.setTypeface(skin.face(false, Typeface.BOLD));
         idLeft.addView(carrierLine);
-        identBig = th.num(this, "--", 30, skin.inkPrimary);
-        identBig.setTypeface(skin.face(true, Typeface.BOLD));
+        identBig = th.num(this, "--", 12, skin.inkSecondary);
         idLeft.addView(identBig);
         idRow.addView(idLeft, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -354,12 +359,15 @@ public class HudActivity extends Screen {
             techBadge.setText("");
             vSignal.setText("--");
         } else {
-            StringBuilder c = new StringBuilder();
-            c.append(s.carrier == null ? "unknown carrier" : s.carrier);
-            if (s.mcc != null) c.append(" (").append(s.mcc).append(")");
-            carrierLine.setText(c.toString());
+            // The name alone in the big slot. The MCC moves down to the small line:
+            // it is useful, and it is not what you are reading at 60 mph.
+            carrierLine.setText(snap.ntn ? "satellite"
+                    : (s.carrier == null ? "unknown carrier" : s.carrier));
 
-            identBig.setText(siteLabel(s));
+            StringBuilder sub = new StringBuilder(siteLabel(s));
+            if (s.mcc != null) sub.append("   ").append(s.mcc);
+            if (snap.ntn && s.carrier != null) sub.append("   via ").append(s.carrier);
+            identBig.setText(sub.toString());
 
             // NR reports whether it is standalone; for everything else the technology
             // name is the honest badge.

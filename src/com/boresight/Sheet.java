@@ -236,6 +236,73 @@ public final class Sheet {
         return this;
     }
 
+    /** Told whether a row is now on, each time it is tapped. */
+    public interface OnPick { void picked(boolean on); }
+
+    /**
+     * A row that toggles in place instead of closing the sheet.
+     *
+     * {@link #choice} dismisses on tap, which is right when the tap is the answer and
+     * wrong when the sheet is a list of things to tick. Deciding what to share means
+     * going down twenty rows; a sheet that shut after each one would have to be
+     * reopened twenty times.
+     */
+    public Sheet pick(final String label, final String note, boolean on,
+                      final OnPick onPick) {
+        final boolean[] state = { on };
+
+        final LinearLayout row = new LinearLayout(a);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(th.dp(12), th.dp(10), th.dp(12), th.dp(10));
+        row.setClickable(true);
+
+        final TextView t = new TextView(a);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        row.addView(t);
+
+        if (note != null && !note.isEmpty()) {
+            TextView n = new TextView(a);
+            n.setText(note);
+            n.setTextColor(skin.inkSecondary);
+            n.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+            n.setPadding(0, th.dp(2), 0, 0);
+            row.addView(n);
+        }
+
+        final Runnable paint = new Runnable() {
+            @Override public void run() {
+                // The mark carries the state, not just the colour: a tick and a cross
+                // are still different with the screen washed out in daylight, and to
+                // anyone who cannot separate the two accent colours.
+                t.setText((state[0] ? "✓   " : "✕   ") + label);
+                t.setTextColor(state[0] ? skin.inkPrimary : skin.inkSecondary);
+                t.setTypeface(skin.face(false, state[0]
+                        ? android.graphics.Typeface.NORMAL
+                        : android.graphics.Typeface.NORMAL));
+                row.setBackground(th.ripple(state[0]
+                        ? th.solid(0x00000000, 0)
+                        : skin.badgeBg(th, Skin.alpha(skin.accent(Skin.CH_ALERT), 0.10f))));
+            }
+        };
+        paint.run();
+
+        row.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                state[0] = !state[0];
+                paint.run();
+                if (onPick != null) onPick.picked(state[0]);
+            }
+        });
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, th.dp(2), 0, 0);
+        row.setLayoutParams(lp);
+        column.addView(row);
+        return this;
+    }
+
     /** A button in the action strip at the bottom. */
     public Sheet action(final String label, final boolean closes, final Runnable run) {
         TextView btn = new TextView(a);

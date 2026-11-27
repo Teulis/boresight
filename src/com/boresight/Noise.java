@@ -309,24 +309,71 @@ public final class Noise {
 
         /** True when this identity has shown itself to be travelling with you. */
         public synchronized boolean ridesWithYou(String ident, double lat, double lon) {
-            if (ident == null) return false;
-            if (riders.contains(ident)) { dropped++; return true; }
+            return ridesWithYou(ident, null, lat, lon);
+        }
 
-            float[] s = seen.get(ident);
+        /**
+         * The same, but also tracked under the broadcast name.
+         *
+         * Keying on the address alone misses the devices that matter most, because the
+         * ones built to be carried are the ones that rotate their address. A real survey
+         * showed a phone key under four addresses in twenty sightings and another radio
+         * under twenty-four in forty-two: every rotation starts a fresh count, so it
+         * never reaches eight and never looks like a rider, however far it travels.
+         *
+         * The name survives the rotation. So a sighting is counted under both keys and
+         * either one can reach the threshold.
+         *
+         * Short names are not used as a key. "4" is a name two unrelated devices in two
+         * towns can share, and a key that collides turns two fixed radios into one
+         * imaginary rider. Long names collide too, but rarely enough that the geometry
+         * still means something — and the cost of a wrong drop is one radio missing from
+         * a survey, against the cost of not dropping, which is thousands of rows of a
+         * thing in your own car.
+         */
+        public synchronized boolean ridesWithYou(String ident, String name,
+                                                 double lat, double lon) {
+            boolean rider = false;
+            if (ident != null) rider = track(ident, lat, lon);
+            String nameKey = nameKey(name);
+            // Both are tracked, not short-circuited: a device whose address is stable
+            // should still accumulate under its name, so the verdict holds when the
+            // address later rotates.
+            if (nameKey != null && track(nameKey, lat, lon)) rider = true;
+            if (rider) dropped++;
+            return rider;
+        }
+
+        /** A name worth keying on, or null. */
+        static String nameKey(String name) {
+            if (name == null) return null;
+            String t = name.trim();
+            return t.length() >= 5 ? "name:" + t.toLowerCase(java.util.Locale.US) : null;
+        }
+
+        /** Count one sighting under a key. True once that key is a known rider. */
+        private boolean track(String key, double lat, double lon) {
+            if (riders.contains(key)) return true;
+
+            float[] s = seen.get(key);
             if (s == null) {
                 if (seen.size() >= CAP) return false;
-                seen.put(ident, new float[]{(float) lat, (float) lon, 1f});
+                seen.put(key, new float[]{(float) lat, (float) lon, 1f});
                 return false;
             }
             s[2]++;
             double spanM = Locate.haversineM(s[0], s[1], lat, lon);
             if (travelsWithYou(spanM, (int) s[2])) {
-                riders.add(ident);
-                seen.remove(ident);   // no longer needs the position, only the verdict
-                dropped++;
+                riders.add(key);
+                seen.remove(key);   // no longer needs the position, only the verdict
                 return true;
             }
             return false;
+        }
+
+        /** The identities caught this session, for the recording screen to offer. */
+        public synchronized java.util.List<String> caught() {
+            return new java.util.ArrayList<>(riders);
         }
 
         /** How many radios the rule has caught, for the recording screen. */

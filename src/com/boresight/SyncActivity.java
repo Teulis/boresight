@@ -33,10 +33,58 @@ public class SyncActivity extends Screen {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private ExecutorService pool;
 
-    private TextView destLine, lastLine, countLine, remoteNote, feedLine;
+    private TextView destLine, lastLine, countLine, remoteNote, feedLine, heldLine;
     private LinearLayout remoteList;
 
     @Override protected String title() { return "SYNC"; }
+
+    /**
+     * Tick what goes into a bundle, leave the rest in this phone's own survey.
+     *
+     * Ordered by row count rather than alphabetically, because the ordering is the
+     * feature: whatever rode in the car was in range at every point of the drive, so it
+     * dominates the count and lands at the top without the person having to know what
+     * they are looking for. A list sorted by name would bury it.
+     */
+    private void chooseShared() {
+        java.util.List<Store.Rider> seen = Store.of(this).mostSeen(40);
+        final Sheet s = Sheet.of(this, "What gets shared");
+        if (seen.isEmpty()) {
+            s.text("Nothing named has been recorded yet. Record a drive and the radios "
+                 + "will be listed here, busiest first.");
+            s.close("Close").show();
+            return;
+        }
+        s.text("Ticked goes into bundles. Unticked stays on this phone. Busiest first — "
+             + "whatever travelled with you is at the top, because it was in range at "
+             + "every point.");
+
+        java.util.List<String> held = Sync.heldBack(this);
+        for (Store.Rider r : seen) {
+            boolean on = true;
+            for (String h : held) if (h.equalsIgnoreCase(r.name)) { on = false; break; }
+            String note = r.rows + (r.rows == 1 ? " row" : " rows")
+                    + (r.spanM > 1000
+                        ? String.format(java.util.Locale.US, "   ·   %.0f km of road",
+                                        r.spanM / 1000)
+                        : "");
+            final String name = r.name;
+            s.pick(r.name, note, on, new Sheet.OnPick() {
+                @Override public void picked(boolean on) {
+                    Sync.hold(SyncActivity.this, name, !on);
+                    paintHeld();
+                }
+            });
+        }
+        s.close("Done").show();
+    }
+
+    private void paintHeld() {
+        if (heldLine == null) return;
+        int n = Sync.heldBack(this).size();
+        heldLine.setText(n == 0 ? "nothing"
+                : n + (n == 1 ? " radio kept local" : " radios kept local"));
+    }
 
     @Override protected void content() {
         pool = Executors.newSingleThreadExecutor();
@@ -93,6 +141,18 @@ public class SyncActivity extends Screen {
                 + "rows gives them one. Do it on one phone only: run it on both and the "
                 + "same measurements get published twice under two different names.");
 
+        // --- what goes in the bundle ---------------------------------------
+        LinearLayout share = pane("What gets shared");
+        heldLine = kv(share, "Held back", "nothing");
+        action(share, "Choose what to share", new Runnable() {
+            @Override public void run() { chooseShared(); }
+        });
+        hint(share, "Ranked by how many rows each one has, because whatever rode in the "
+                 + "car is at every point of the drive and so is always at the top. "
+                 + "Anything unticked stays in this phone's survey and is left out of "
+                 + "bundles — your car belongs in your log and in nobody else's. This "
+                 + "is remembered, so the next drive starts where you left it.");
+
         // --- the automatic route, which not every provider offers ----------
         LinearLayout dest = pane("Automatic folder");
         destLine = kv(dest, "Folder", "not set");
@@ -142,6 +202,7 @@ public class SyncActivity extends Screen {
     }
 
     private void refresh() {
+        paintHeld();
         destLine.setText(Sync.destinationLabel(this));
         lastLine.setText(Sync.fmt(Prefs.get(this).getLong(Prefs.SYNC_LAST, 0)));
         pool.execute(new Runnable() {

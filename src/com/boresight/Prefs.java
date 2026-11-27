@@ -107,6 +107,15 @@ public final class Prefs {
 
     // --- sync -------------------------------------------------------------
     /** Persisted SAF tree the survey is pushed to. Absent until the user grants one. */
+    /**
+     * Named radios held back from a bundle, one per line.
+     *
+     * Deliberately not the same list as NOISE_EXTRA. That one stops a radio being
+     * recorded at all; this one keeps it in your own survey and leaves it out of what
+     * you hand to somebody else. Your car belongs in your log and in nobody else's.
+     */
+    public static final String SYNC_EXCLUDE   = "sync_exclude";
+
     public static final String SYNC_TREE      = "sync_tree";
     public static final String SYNC_AUTO      = "sync_auto";
     public static final String SYNC_LAST      = "sync_last";

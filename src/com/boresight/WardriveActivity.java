@@ -6,6 +6,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Recording: the CellMapper-style survey log, and every switch that governs it.
@@ -97,6 +98,9 @@ public class WardriveActivity extends Screen {
                 Noise.rollingRule(),
                 Prefs.DROP_VEHICLE, true, null);
         riderLine = kv(noise, "Caught this session", "-");
+        action(noise, "Pick from what you've recorded", new Runnable() {
+            @Override public void run() { pickRiders(store); }
+        });
         action(noise, "My ignore list", new Runnable() {
             @Override public void run() { ignoreList(); }
         });
@@ -223,6 +227,58 @@ public class WardriveActivity extends Screen {
      * app. A car's Bluetooth name is specific to its owner and does not belong in anyone
      * else's build; it belongs here.
      */
+    /**
+     * Offer the radios that actually travelled with you, so the ignore list can be
+     * filled by tapping rather than by remembering what your car calls itself.
+     *
+     * The list already worked; nobody could use it. Filtering your own car meant
+     * knowing its Bluetooth name exactly, which nobody does — it is on a screen in the
+     * infotainment system you have not opened since you bought it. The survey already
+     * knows, because the thing is in every other row: ranked by how far it travelled
+     * with the phone, the car and the kit in the bag are the top entries and the fixed
+     * access points are not there at all.
+     */
+    private void pickRiders(final Store store) {
+        final List<Store.Rider> found = store.ridersSeen(12);
+        final Sheet s = Sheet.of(this, "Riding with you");
+        if (found.isEmpty()) {
+            s.text("Nothing in the log has travelled far enough to look like it is "
+                 + "riding with you. Record a drive first — this ranks radios by how "
+                 + "far they moved with the phone, and anything bolted to a building "
+                 + "cannot move at all.");
+            s.close("Close").show();
+            return;
+        }
+        s.text("Ranked by how far each one travelled with the phone. A fixed radio "
+             + "cannot travel, so everything here is in the vehicle or in your bag. "
+             + "Tap to add it to your ignore list.");
+        for (final Store.Rider r : found) {
+            String km = r.spanM >= 1000
+                    ? String.format(Locale.US, "%.0f km", r.spanM / 1000)
+                    : Math.round(r.spanM) + " m";
+            s.choice(r.name, r.rows + " rows   ·   " + km + " of road", false,
+                    new Runnable() {
+                @Override public void run() { addToIgnore(r.name); }
+            });
+        }
+        s.close("Close").show();
+    }
+
+    /** Append one name to the ignore list, without disturbing what is already there. */
+    private void addToIgnore(String name) {
+        String now = Prefs.string(this, Prefs.NOISE_EXTRA, "");
+        for (String line : now.split("\n")) {
+            if (line.trim().equalsIgnoreCase(name.trim())) {
+                toast("Already ignored");
+                return;
+            }
+        }
+        String next = now.trim().isEmpty() ? name : now.trim() + "\n" + name;
+        Prefs.put(this, Prefs.NOISE_EXTRA, next);
+        toast("Ignoring " + name);
+        counts();
+    }
+
     private void ignoreList() {
         final Sheet s = Sheet.of(this, "My ignore list");
         s.text("One per line. A plain name matches anywhere in a name, so \"mycar\" "

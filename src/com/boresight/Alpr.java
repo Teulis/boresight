@@ -52,9 +52,16 @@ public final class Alpr {
      * the others are mirrors of the same database.
      */
     private static final String[] ENDPOINTS = {
-            "https://overpass-api.de/api/interpreter",
-            "https://overpass.private.coffee/api/interpreter",
+            // Ordered by how often they answer rather than by data freshness. All
+            // mirror the same database and are minutes apart; a mirror that replies is
+            // worth more than a reference instance that returns 502, and the reference
+            // instance returns 502 a great deal.
             "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.osm.jp/api/interpreter",
+            "https://overpass.osm.ch/api/interpreter",
+            "https://overpass.openstreetmap.ru/api/interpreter",
     };
 
     /**
@@ -134,20 +141,36 @@ public final class Alpr {
 
         String body = null;
         StringBuilder problems = new StringBuilder();
-        for (String ep : ENDPOINTS) {
-            try {
-                body = post(ep, q);
-                f.endpoint = ep;
-                break;
-            } catch (Throwable t) {
-                if (problems.length() > 0) problems.append("\n");
-                problems.append(host(ep)).append(": ").append(t.getMessage());
+        // Two passes. These are free, shared servers and "busy" is their normal state
+        // rather than an error — the old message told the user to wait a minute and try
+        // again, which is advice the app can follow by itself. The pause is between
+        // passes only, so a working mirror still answers at once.
+        for (int pass = 0; pass < 2 && body == null; pass++) {
+            if (pass > 0) {
+                problems.setLength(0);
+                try { Thread.sleep(4000); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            for (String ep : ENDPOINTS) {
+                try {
+                    body = post(ep, q);
+                    f.endpoint = ep;
+                    break;
+                } catch (Throwable t) {
+                    if (problems.length() > 0) problems.append("\n");
+                    problems.append(host(ep)).append(": ").append(t.getMessage());
+                }
             }
         }
         if (body == null) {
-            f.error = "No Overpass mirror answered.\n\n" + problems
-                    + "\n\nThese are free, shared servers and are often at capacity. "
-                    + "Waiting a minute usually works.";
+            f.error = "No Overpass mirror answered, on either of two attempts.\n\n"
+                    + problems
+                    + "\n\nThese are free, shared servers run by volunteers and being at "
+                    + "capacity is their normal state, not a fault. Six mirrors were "
+                    + "tried, then all six again after a pause. Leaving it a few minutes "
+                    + "usually works; the cameras already downloaded are unaffected.";
             return f;
         }
 
