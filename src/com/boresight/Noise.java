@@ -333,13 +333,30 @@ public final class Noise {
          */
         public synchronized boolean ridesWithYou(String ident, String name,
                                                  double lat, double lon) {
-            boolean rider = false;
-            if (ident != null) rider = track(ident, lat, lon);
             String nameKey = nameKey(name);
-            // Both are tracked, not short-circuited: a device whose address is stable
-            // should still accumulate under its name, so the verdict holds when the
-            // address later rotates.
-            if (nameKey != null && track(nameKey, lat, lon)) rider = true;
+            boolean rider = false;
+
+            if (ident != null) {
+                if (riders.contains(ident)) {
+                    rider = true;
+                } else if (track(ident, lat, lon)) {
+                    rider = true;
+                    // One address proved it travelled, so the name it broadcasts
+                    // travels too. That is what lets the next rotation be caught at
+                    // once instead of starting a fresh count.
+                    if (nameKey != null) riders.add(nameKey);
+                }
+            }
+            // A name is never promoted on its own evidence, only on an address under
+            // it having qualified. Counting sightings by name alone looked right and
+            // was badly wrong: "xfinitywifi" is one name shared by millions of fixed
+            // hotspots, so by name it appears to travel the length of the drive, when
+            // in fact hundreds of separate access points were each passed once. The
+            // same goes for default TV names, "Office", and the Seos readers on
+            // office doors. One address cannot be in two towns; one name can be
+            // everywhere, and dropping it would delete real survey rows.
+            if (!rider && nameKey != null && riders.contains(nameKey)) rider = true;
+
             if (rider) dropped++;
             return rider;
         }

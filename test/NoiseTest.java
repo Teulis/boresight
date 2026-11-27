@@ -140,6 +140,66 @@ public class NoiseTest {
         pair.reset();
         check("reset clears the verdicts", !pair.ridesWithYou("ble:rider", 39.75, -104.99));
         check("and the counts", pair.count() == 0);
+
+        sharedNamesAreNotRiders();
+        rotatingAddressesAreCaughtByName();
+    }
+
+    /**
+     * The failure this guards against deleted real survey rows.
+     *
+     * A first attempt counted sightings by name as well as by address, to catch the
+     * devices that rotate their address. It also caught every name that many separate
+     * fixed radios happen to share: a real drive produced "xfinitywifi" at 578 rows
+     * across 110 km, which by name looks exactly like something in the car, and is in
+     * fact 578 different hotspots each passed once. Default television names, "Office"
+     * and the Seos readers on office doors all did the same.
+     */
+    private static void sharedNamesAreNotRiders() {
+        System.out.println("\n-- a shared name is not a rider --");
+
+        // One name, a different access point every kilometre, each heard once.
+        Noise.Riders r = new Noise.Riders();
+        boolean everCaught = false;
+        for (int i = 0; i < 40; i++) {
+            everCaught |= r.ridesWithYou("wifi:ap" + i, "xfinitywifi",
+                    39.7392 + i * 0.009, -104.9903);
+        }
+        check("40 hotspots sharing one name over 40 km are never dropped", !everCaught);
+        check("and nothing is counted as a rider", r.count() == 0);
+
+        // The same shape with a short name, which is not used as a key at all.
+        Noise.Riders tv = new Noise.Riders();
+        boolean caughtTv = false;
+        for (int i = 0; i < 20; i++) {
+            caughtTv |= tv.ridesWithYou("wifi:tv" + i, "[TV] Samsung 7 Series (50)",
+                    39.7392 + i * 0.02, -104.9903);
+        }
+        check("televisions in twenty houses are not one rider", !caughtTv);
+    }
+
+    /**
+     * The case the name key exists for: one device, a new address every few km.
+     *
+     * A phone key in the car showed four addresses across fifty kilometres. Keyed on
+     * the address alone every rotation starts a fresh count and it is never caught,
+     * however far it travels.
+     */
+    private static void rotatingAddressesAreCaughtByName() {
+        System.out.println("\n-- a rotating address is caught by its name --");
+
+        Noise.Riders r = new Noise.Riders();
+        // First address, held long enough to prove it travelled.
+        for (int i = 0; i < 12; i++) {
+            r.ridesWithYou("ble:first", "Rivian Phone Key", 39.7392 + i * 0.009, -104.9903);
+        }
+        check("the first address is caught",
+                r.ridesWithYou("ble:first", "Rivian Phone Key", 39.85, -104.99));
+        // It rotates. The new address has never been seen, but the name has.
+        check("and the next address is caught at once, not after eight more",
+                r.ridesWithYou("ble:second", "Rivian Phone Key", 39.86, -104.99));
+        check("a different radio with another name is unaffected",
+                !r.ridesWithYou("wifi:elsewhere", "Some Cafe", 39.86, -104.99));
     }
 
     private static void check(String what, boolean ok) {

@@ -701,19 +701,30 @@ public final class Store extends SQLiteOpenHelper {
      */
     public List<Rider> mostSeen(int limit) {
         List<Rider> out = new ArrayList<>();
+        // Ranked by rows, but the distance shown is the widest any single address under
+        // that name travelled — not the spread of the whole group.
+        //
+        // The group spread is the misleading number that caused the rider bug: by name,
+        // "xfinitywifi" spans a hundred kilometres, because hundreds of fixed hotspots
+        // share it. Reporting that next to a row count invites exactly the wrong
+        // conclusion about what is riding with you, so the same correction applies
+        // here even though this list is ordered by count rather than by distance.
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT name, COUNT(*) n, MIN(lat), MAX(lat), MIN(lon), MAX(lon) "
-              + "FROM obs WHERE name IS NOT NULL AND TRIM(name) <> '' "
-              + "AND kind IN (?, ?) GROUP BY name ORDER BY n DESC LIMIT " + limit,
+                "SELECT name, SUM(n) rows, MAX(span) widest FROM ("
+              + "  SELECT name, COUNT(*) n, "
+              + "         (MAX(lat)-MIN(lat))*(MAX(lat)-MIN(lat)) "
+              + "       + (MAX(lon)-MIN(lon))*(MAX(lon)-MIN(lon)) span "
+              + "  FROM obs WHERE name IS NOT NULL AND TRIM(name) <> '' "
+              + "  AND kind IN (?, ?) GROUP BY name, IFNULL(mac, '')"
+              + ") GROUP BY name ORDER BY rows DESC LIMIT " + limit,
                 new String[]{KIND_WIFI, KIND_BLE});
         try {
             while (c.moveToNext()) {
                 Rider r = new Rider();
                 r.name = c.getString(0);
                 r.rows = c.getInt(1);
-                r.spanM = c.isNull(2) ? 0
-                        : Locate.haversineM(c.getDouble(2), c.getDouble(4),
-                                            c.getDouble(3), c.getDouble(5));
+                // Squared degrees in SQL, metres out here.
+                r.spanM = c.isNull(2) ? 0 : Math.sqrt(c.getDouble(2)) * 111_320;
                 out.add(r);
             }
         } finally { c.close(); }
@@ -742,22 +753,42 @@ public final class Store extends SQLiteOpenHelper {
      */
     public List<Rider> ridersSeen(int limit) {
         List<Rider> out = new ArrayList<>();
+        // Grouped by name AND address, then the widest-travelling address per name is
+        // what counts.
+        //
+        // Grouping by name alone was wrong, and wrong in the direction that destroys
+        // data. "xfinitywifi" is one name shared by millions of fixed hotspots, and by
+        // name it looks like something that travelled 110 km with the phone — when in
+        // fact 578 different access points were each passed once. Default TV names,
+        // "Office", and the Seos readers on office doors all do the same thing.
+        //
+        // One address cannot be in two towns. So a name only counts as riding with you
+        // if some single address under it covered the distance: a car's hotspot keeps
+        // one address the whole way, and a device that rotates still holds each address
+        // across a stretch of road. A shared name has hundreds of addresses that each
+        // never move.
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT name, COUNT(*) n, MIN(lat), MAX(lat), MIN(lon), MAX(lon) "
-              + "FROM obs WHERE name IS NOT NULL AND TRIM(name) <> '' "
-              + "AND lat IS NOT NULL AND kind IN (?, ?) "
-              + "GROUP BY name HAVING n >= 8",
+                "SELECT name, SUM(n) rows, MAX(span) widest FROM ("
+              + "  SELECT name, COUNT(*) n, "
+              + "         MIN(lat) la0, MAX(lat) la1, MIN(lon) lo0, MAX(lon) lo1, "
+              + "         (MAX(lat)-MIN(lat))*(MAX(lat)-MIN(lat)) "
+              + "       + (MAX(lon)-MIN(lon))*(MAX(lon)-MIN(lon)) span "
+              + "  FROM obs WHERE name IS NOT NULL AND TRIM(name) <> '' "
+              + "  AND lat IS NOT NULL AND kind IN (?, ?) "
+              + "  GROUP BY name, IFNULL(mac, '')"
+              + ") GROUP BY name HAVING rows >= 8 ORDER BY widest DESC",
                 new String[]{KIND_WIFI, KIND_BLE});
         try {
             while (c.moveToNext()) {
-                double lat0 = c.getDouble(2), lat1 = c.getDouble(3);
-                double lon0 = c.getDouble(4), lon1 = c.getDouble(5);
-                double span = Locate.haversineM(lat0, lon0, lat1, lon1);
-                if (span <= 3000) continue;          // the live rule's threshold
+                // The inner span is in squared degrees, which is only good for ranking.
+                // Convert the winner properly before applying the distance threshold.
+                double degSq = c.getDouble(2);
+                double approxM = Math.sqrt(degSq) * 111_320;
+                if (approxM <= 3000) continue;       // the live rule's threshold
                 Rider r = new Rider();
                 r.name = c.getString(0);
                 r.rows = c.getInt(1);
-                r.spanM = span;
+                r.spanM = approxM;
                 out.add(r);
             }
         } finally { c.close(); }

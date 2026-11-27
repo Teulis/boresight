@@ -150,8 +150,47 @@ public class NetToolsActivity extends Screen {
         hint(out, "Every probe is a full TCP connection or an ICMP echo — nothing here is "
                 + "stealthy, because an app cannot open raw sockets. Scan only what you "
                 + "are authorised to.");
+        hint(out, "On mobile data the target is left empty rather than filled with the "
+                + "default gateway. That gateway belongs to the carrier, and a target "
+                + "you did not type is the wrong thing to aim a probe at. The gateway "
+                + "chip still fills it when you mean to.");
 
-        target.setText(gateway());
+        // Only when the way out is Wi-Fi or a cable.
+        //
+        // On mobile data the default gateway is inside the carrier's network, and
+        // nobody asked to send anything to it. Filling the box means the next tap on
+        // Ping aims at infrastructure the user never chose — not illegal, and not
+        // stealthy either, but it is traffic they did not intend toward equipment that
+        // is not theirs. A target you did not type is the wrong default; the gateway
+        // chip is still there when you do mean it.
+        if (onCellular()) {
+            target.setHint("address or host — not prefilled on mobile data");
+        } else {
+            target.setText(gateway());
+        }
+    }
+
+    /** True when the active network leaves through the modem. */
+    private boolean onCellular() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            android.net.Network n = cm.getActiveNetwork();
+            if (n == null) return false;
+            android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+            if (caps == null) return false;
+            // Wi-Fi or ethernet wins even on a phone that also has data up: that is
+            // the route the probe will actually take.
+            if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+             || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                return false;
+            }
+            return caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR);
+        } catch (Throwable t) {
+            // Unsure means do not prefill. The safe default is an empty box.
+            return true;
+        }
     }
 
     private View chip(String label, final Runnable run) {

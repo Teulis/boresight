@@ -2,6 +2,7 @@ package com.boresight;
 
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.view.Gravity;
@@ -438,8 +439,35 @@ public class Drawer extends FrameLayout {
     };
     /** What the user has typed into the filter, if anything. */
     private String query = "";
-    /** Groups the user has opened. Remembered for the life of the drawer. */
-    private final java.util.HashSet<String> expanded = new java.util.HashSet<>();
+    /**
+     * Groups the user has opened, remembered across screens.
+     *
+     * This used to be a field on the drawer, and a drawer is built fresh by every
+     * screen — so opening Network tools, tapping SSH and then coming back found the
+     * group collapsed again and the entry apparently gone. Reported as "I backed out
+     * and couldn't get back in, it just disappeared", which is exactly what it looks
+     * like when the only way back is to notice a collapsed heading and reopen it.
+     *
+     * Static rather than a preference read on every build: it is one set shared by
+     * every drawer in the process, and it is persisted too so it survives a restart.
+     */
+    private static java.util.HashSet<String> expanded;
+
+    private java.util.HashSet<String> expanded(Context c) {
+        if (expanded == null) {
+            expanded = new java.util.HashSet<>();
+            for (String g : Prefs.string(c, Prefs.MENU_OPEN, "").split("\n")) {
+                if (!g.trim().isEmpty()) expanded.add(g.trim());
+            }
+        }
+        return expanded;
+    }
+
+    private void rememberOpen(Context c) {
+        StringBuilder b = new StringBuilder();
+        for (String g : expanded) { if (b.length() > 0) b.append('\n'); b.append(g); }
+        Prefs.put(c, Prefs.MENU_OPEN, b.toString());
+    }
     private android.widget.EditText search;
     private LinearLayout searchRow;
 
@@ -511,7 +539,7 @@ public class Drawer extends FrameLayout {
 
             // Searching shows results outright; there is no sense hiding a match
             // behind a heading the user then has to open.
-            boolean open = searching || holdsCurrent || expanded.contains(g);
+            boolean open = searching || holdsCurrent || expanded(a).contains(g);
 
             if (!searching) {
                 groupHeader(a, g, rows.size(), open);
@@ -652,7 +680,9 @@ public class Drawer extends FrameLayout {
 
         row.setOnClickListener(new OnClickListener() {
             @Override public void onClick(View v) {
-                if (!expanded.remove(name)) expanded.add(name);
+                java.util.HashSet<String> open = expanded(a);
+                if (!open.remove(name)) open.add(name);
+                rememberOpen(a);
                 rebuild(a);
             }
         });

@@ -100,6 +100,8 @@ public final class Prefs {
     // --- menu -------------------------------------------------------------
     /** Which drawer profile is shown: 0 DAS, 1 Simple, 2 Everything. */
     public static final String MENU_VIEW      = "menu_view";
+    /** Menu groups the user has opened, one per line. Survives leaving a screen. */
+    public static final String MENU_OPEN      = "menu_open";
 
     // --- session log ------------------------------------------------------
     /** Filter the session log to LTE on DAS band families. On by default. */
