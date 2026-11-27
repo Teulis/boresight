@@ -43,11 +43,41 @@ $apkSrc = (Get-ChildItem "$root\build\signed" -Filter *.apk | Select-Object -Fir
 $apk = Join-Path $env:TEMP ("boresight-" + $Tag.TrimStart("v") + ".apk")
 Copy-Item $apkSrc $apk -Force
 
+# The hash goes in the notes of every release, because the alternative was telling
+# people to skip Play Protect — which is advice nobody should take from a stranger's
+# README. A published digest lets them check the download against VirusTotal without
+# uploading anything or trusting this project's word for it.
+$sha = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
+$size = [math]::Round((Get-Item $apk).Length / 1KB)
+$notes = Join-Path $env:TEMP "boresight-notes-$($Tag.TrimStart('v')).md"
+@"
+Install by downloading the APK on the phone and opening it. No adb, no developer
+options, no cable. Signed with the same key as every other build, so it installs over
+the previous one and keeps your data.
+
+**SHA-256** ``$sha``
+$size KB
+
+Check the download matches before installing, and paste that hash into VirusTotal if
+you want a second opinion — a hash lookup reports what dozens of engines already think,
+without uploading the file or scanning anything locally.
+
+``sha256sum boresight-$($Tag.TrimStart('v')).apk``
+``certutil -hashfile boresight-$($Tag.TrimStart('v')).apk SHA256``
+
+Tested on a Galaxy S22 Ultra (Android 15) and a Galaxy S25 Ultra (Android 17). Two
+phones, one manufacturer, one country — behaviour on anything else is unverified.
+"@ -replace "`r`n", "`n" | ForEach-Object {
+    [System.IO.File]::WriteAllText($notes, $_, (New-Object System.Text.UTF8Encoding $false))
+}
+
 Push-Location $root
 & git add -A
 & git commit -q -m "Build $Tag" 2>$null
 & git push -q origin HEAD 2>$null
-& gh release create $Tag $apk --title "Boresight $($Tag.TrimStart('v'))" --generate-notes
+& gh release create $Tag $apk --title "Boresight $($Tag.TrimStart('v'))" --notes-file $notes
 Pop-Location
 Remove-Item $apk -Force -ErrorAction SilentlyContinue
+Remove-Item $notes -Force -ErrorAction SilentlyContinue
+Write-Host "sha256 $sha" -ForegroundColor Cyan
 Write-Host "released $Tag" -ForegroundColor Green

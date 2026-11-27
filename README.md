@@ -16,27 +16,47 @@ Everything here has been run on a **Galaxy S22 Ultra (Android 15)** and a **Gala
 Ultra (Android 17)**, on AT&T and T-Mobile in the United States. That is the whole of
 it: two phones, one manufacturer, one country.
 
-This matters more than it would for most apps, because almost everything interesting
-here depends on behaviour that vendors implement differently and are allowed to. Which
-telephony fields a modem populates, whether it reports neighbours at all, whether
-`CellInfo` carries a timing advance, what the physical channel configuration contains,
-how aggressively Wi-Fi scans are throttled, whether BLE results arrive with the screen
-off — all of it varies by chipset, by Android version, by carrier, and sometimes by
-build. The code is written to degrade honestly when a field is missing, and that
-behaviour has been exercised on exactly two devices.
+Android does not require a phone to report most of what this app reads. Whether a modem
+fills in the neighbour list, whether `CellInfo` carries a timing advance, what the
+physical channel configuration contains, how hard Wi-Fi scans are throttled, whether
+BLE results arrive with the screen off — each of those is left to the manufacturer, and
+they answer differently. It changes by chipset, by Android version, by carrier, and
+sometimes between builds on the same handset.
+
+The code treats a missing field as missing and says so. That behaviour has been
+exercised on exactly two devices.
 
 So: if a screen is blank or a number reads as a dash on your phone, that is the
 designed response to a platform that would not answer — but whether it is the *right*
 response on your hardware is genuinely unknown. Reports from other devices are the most
 useful thing anyone could send.
 
-## Getting a build onto a phone
+## Installing it
 
-Grab the APK from the **Releases** page — it installs over the previous one, because
-every build is signed with the same key.
+Download the APK from the [Releases](../../releases) page on the phone and open it.
+That is the whole process — no adb, no developer options, no cable. Every build is
+signed with the same key, so a new one installs over the old one and keeps your data.
 
-Android will warn about installing from outside the Play Store, and Play Protect may ask
-to send the app for scanning; "Don't send" is fine.
+Android will warn that it came from outside the Play Store. That warning is correct:
+this is an unsigned-by-Google binary from a stranger on the internet, and you should
+want to know where it came from.
+
+### Checking it before you install
+
+Every release lists the SHA-256 of its APK, and GitHub shows the same digest on the
+asset itself. Verify the file you downloaded matches, and submit that hash to VirusTotal
+if you want a second opinion — a hash lookup tells you what dozens of engines already
+think, without uploading anything or running a scan on your phone.
+
+```bash
+sha256sum boresight-*.apk                 # Linux, macOS, Termux
+certutil -hashfile boresight-*.apk SHA256 # Windows
+```
+
+Play Protect may also offer to send the app to Google for a security check. Sending it
+is a reasonable thing to do and this project has no objection — an unknown binary
+getting looked at is the system working. It is not required to install, and declining
+only means Google has not seen this particular build.
 
 ## Building it yourself
 
